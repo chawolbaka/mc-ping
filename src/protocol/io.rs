@@ -1,0 +1,78 @@
+use core::num;
+use std::{
+    io::{self, ErrorKind, Read, Result, Write}, net::TcpStream,
+};
+
+impl<R: Read + ?Sized> MinecraftReadExt for R {}
+impl<W: Write + ?Sized> MinecraftWriteExt for W {}
+
+pub trait MinecraftReadExt: Read {
+
+    fn read_string(&mut self) -> Result<String> {
+        let len = self.read_varint()? as usize;
+        let mut buf =vec![0u8; len];
+        self.read_exact(&mut buf)?;
+        let value = String::from_utf8(buf)
+            .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+        Ok(value)
+    }
+    fn read_unsigned_short(&mut self) -> Result<u16> {
+        let mut buf = [0u8;2];
+        self.read_exact(&mut buf);
+        Ok(u16::from_be_bytes(buf))
+    }
+
+    fn read_varint(&mut self) -> Result<i32> {
+        let mut number: i32 = 0;
+        let mut buf = [0u8; 1];
+        for i in 0..5 {
+            self.read_exact(&mut buf)?;
+            let byte: i32 = buf[0] as i32;
+            number |= (byte & 0b0111_1111) << i * 7;
+            if byte & 0b1000_0000 == 0 {
+                return Ok(number);
+            }
+        }
+        Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "varint overflow",
+        ))
+    }
+}
+
+pub trait MinecraftWriteExt: Write {
+
+    fn write_string(&mut self, str:&str) -> Result<()> {
+        self.write_varint(str.len() as i32)?;
+        self.write_all(str.as_bytes())?;
+        Ok(())
+    }
+
+    fn write_varint(&mut self, mut number: i32) -> Result<()> {
+        while number & -128 != 0 {
+            let byte = (number as u8) & 0b1111111 | 0b1000_0000;
+            self.write_all(&[byte])?;
+            number = ((number as u32) >> 7) as i32;
+        }
+        self.write_all(&[number as u8])?;
+        Ok(())
+    }
+}
+
+pub fn send_packet(stream: &mut TcpStream, packet: &mut Vec<u8>) -> Result<()> {
+    let len = packet.len();
+    if len & 0b1000_0000 == 0 {
+        packet.insert(0, len as u8);
+    } else {
+        todo!();
+    }
+    stream.write_all(packet)?;
+    Ok(())
+}
+
+pub fn recv_packet(stream: &mut TcpStream) -> Result<Vec<u8>> {
+    let len = stream.read_varint()? as usize;
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf)?;
+    Ok(buf)
+}
