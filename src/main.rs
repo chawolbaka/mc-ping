@@ -3,22 +3,27 @@ mod protocol;
 use serde_json::Value;
 use std::env;
 use std::io::{ErrorKind, Read, Result, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::str::FromStr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-
 use crate::protocol::io::*;
 use crate::protocol::packet::*;
 
 fn main() {
     let args:Vec<String> = env::args().collect();
-    let addr = SocketAddr::from_str(&args[1]).unwrap();
-    for seq in (0..4) {
-        let r = ping(&addr).unwrap();
-        println!(
-            "{}: seq={} online={} time={:?}",
-            addr.ip(), seq, r.0, r.1
-        );
+    match args[1].to_socket_addrs() {
+        Ok(mut addrs) => {
+            let addr = addrs.next().unwrap();
+            println!("{:?}",addr);
+            for seq in (0..4) {
+                let r = ping(&addr).unwrap();
+                println!(
+                    "{}: seq={} online={} time={:?}",
+                    addr.ip(), seq, r.0, r.1
+                );
+            }
+        }
+        Err(_) => eprintln!("Ping request could not find host {}. Please check the name and try again.", args[1]),
     }
 }
 
