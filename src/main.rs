@@ -38,8 +38,8 @@ fn main() {
                 let mut info = String::from_str(&format!(
                     "{} bytes from {}: seq={} ", r.received_bytes, addr.ip(), seq)).unwrap();
 
-                if r.online > 0 {
-                    info.push_str(&format!("online={} ",r.online));
+                if r.online >= 0 {
+                    info.push_str(&format!("onlines={} ",r.online));
                 }
 
                 if r.mods > 0 {
