@@ -4,18 +4,32 @@ use crate::protocol::io::*;
 use crate::protocol::packet::*;
 use serde_json::Value;
 use std::env;
+use std::env::args;
 use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use clap::Parser;
 
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args  {
+    /// Hostname or IP address to ping
+    target: String,
+
+    /// Number of mc-ping requests to send
+    #[arg(short = 'c', long, default_value_t = 4)]
+    count: u32,
+
+}
+
 fn main() {
-    let mut args: Vec<String> = env::args().collect();
-    let addr = resolve_host(&mut args[1]);
-    for seq in (0..4) {
+    let args = Args::parse();
+    let addr = resolve_host(&args.target);
+    for seq in (0..args.count) {
         match ping(&addr) {
             Ok(r) => println!("{}: seq={} online={} time={:?}", addr.ip(), seq, r.0, r.1),
             Err(e) => eprintln!("{}", e),
@@ -23,14 +37,16 @@ fn main() {
     }
 }
 
-fn resolve_host(host: &mut String) -> SocketAddr {
+fn resolve_host(host: &str) -> SocketAddr {
+    let mut host = String::from_str(host).unwrap();
     if !host.contains(':') {
         host.push_str(MINECRAFT_DEFAULT_PORT);
     }
+
     match host.to_socket_addrs() {
         Ok(mut addrs) => return addrs.next().unwrap(),
         Err(e) => {
-            eprintln!("Ping request could not find host {}. Please check the name and try again.", strip_port(host));
+            eprintln!("Ping request could not find host {}. Please check the name and try again.", strip_port(&host));
             exit(-1);
         },
     };
