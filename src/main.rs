@@ -4,10 +4,8 @@ use crate::protocol::io::*;
 use crate::protocol::packet::*;
 use clap::Parser;
 use serde_json::Value;
-use std::env;
-use std::env::args;
-use std::io::{Error, ErrorKind, Read, Result, Write};
-use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs};
+use std::io::{Result, Write};
+use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -24,20 +22,38 @@ struct Args {
     #[arg(short = 'c', long, default_value_t = 4)]
     count: u32,
 }
+struct PingReport {
+    received_bytes: usize,
+    online: i64,
+    mods: i64,
+    elapsed: Duration,
+}
 
 fn main() {
     let args = Args::parse();
     let addr = resolve_host(&args.target);
     for seq in (0..args.count) {
         match ping(&args.target, &addr) {
-            Ok(r) => println!(
-                "{} bytes from {}: seq={} online={} time={:?}", r.0, addr.ip(), seq, r.1, r.2 ),
+            Ok(r) => {
+                let mut info = String::from_str(&format!(
+                    "{} bytes from {}: seq={} ", r.received_bytes, addr.ip(), seq)).unwrap();
+
+                if r.online > 0 {
+                    info.push_str(&format!("online={} ",r.online));
+                }
+
+                if r.mods > 0 {
+                    info.push_str(&format!("mods={} ",r.mods));
+                }
+                info.push_str(&format!("time={:?}",r.elapsed));
+                println!("{info}");
+            },
             Err(e) => eprintln!("{}", e),
         }
     }
 }
 
-fn ping(host: &str, addr: &SocketAddr) -> Result<(usize, i64, Duration)> {
+fn ping(host: &str, addr: &SocketAddr) -> Result<PingReport> {
     let mut stream = TcpStream::connect(addr)?;
     stream.write_packet(
         &mut HandshakePacket {
@@ -65,8 +81,17 @@ fn ping(host: &str, addr: &SocketAddr) -> Result<(usize, i64, Duration)> {
 
     let len = first_packet.len();
     let json: Value = serde_json::from_str(&response.content)?;
-    let online = json["players"]["online"].as_i64().unwrap_or(-1);
-    Ok((get_varint_length(len) + len + 10 /* Pong size */, online, elapsed))
+    Ok(PingReport {
+        received_bytes: get_varint_length(len) + len + 10, /* Pong size */
+        online: json["players"]["online"].as_i64().unwrap_or(-1),
+        mods: json
+        .get("modinfo")
+        .and_then(|m| m.get("modList"))
+        .and_then(|list| list.as_array())
+        .map(|arr| arr.len() as i64)
+        .unwrap_or(-1),
+        elapsed: elapsed,
+    })
 }
 
 fn resolve_host(host: &str) -> SocketAddr {
