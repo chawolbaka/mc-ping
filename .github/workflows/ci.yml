@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+
+          # Windows x64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          # macOS x64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+
+          # macOS arm64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      # 自动解析二进制名称（bin crate）
+      - name: Determine binary name
+        id: bin
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN_NAME="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[0].targets[] | select(.kind[]=="bin") | .name' \
+            | head -n 1)"
+          if [ -z "$BIN_NAME" ] || [ "$BIN_NAME" = "null" ]; then
+            echo "No binary target found"
+            exit 1
+          fi
+          echo "BIN_NAME=$BIN_NAME" >> "$GITHUB_ENV"
+
+      - name: Build (release)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --target "${{ matrix.target }}"
+
+      # 统一把产物复制到 dist/ 下，并重命名为带 target 的单文件
+      - name: Prepare single-file artifact (unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          SRC="target/${{ matrix.target }}/release/${BIN_NAME}"
+          DST="dist/${BIN_NAME}-${{ matrix.target }}"
+          cp "$SRC" "$DST"
+          chmod +x "$DST"
+          echo "ARTIFACT_PATH=$DST" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=${BIN_NAME}-${{ matrix.target }}" >> "$GITHUB_ENV"
+
+      - name: Prepare single-file artifact (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $binName = "$env:BIN_NAME"
+          $src = "target/${{ matrix.target }}/release/$binName.exe"
+          $dst = "dist/$binName-${{ matrix.target }}.exe"
+          Copy-Item $src $dst -Force
+          "ARTIFACT_PATH=$dst" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ARTIFACT_NAME=$binName-${{ matrix.target }}.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload artifact (single file)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_PATH }}
+          if-no-files-found: error
