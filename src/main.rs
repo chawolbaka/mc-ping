@@ -2,6 +2,7 @@
 mod protocol;
 use crate::protocol::io::*;
 use crate::protocol::packet::*;
+use clap::Parser;
 use serde_json::Value;
 use std::env;
 use std::env::args;
@@ -10,20 +11,18 @@ use std::net::{Ipv4Addr, SocketAddr, TcpStream, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use clap::Parser;
 
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args  {
+struct Args {
     /// Hostname or IP address to ping
     target: String,
 
     /// Number of mc-ping requests to send
     #[arg(short = 'c', long, default_value_t = 4)]
     count: u32,
-
 }
 
 fn main() {
@@ -31,7 +30,8 @@ fn main() {
     let addr = resolve_host(&args.target);
     for seq in (0..args.count) {
         match ping(&addr) {
-            Ok(r) => println!("{}: seq={} online={} time={:?}", addr.ip(), seq, r.0, r.1),
+            Ok(r) => println!(
+                "{} bytes from {}: seq={} online={} time={:?}", r.0, addr.ip(), seq, r.1, r.2 ),
             Err(e) => eprintln!("{}", e),
         }
     }
@@ -46,9 +46,12 @@ fn resolve_host(host: &str) -> SocketAddr {
     match host.to_socket_addrs() {
         Ok(mut addrs) => return addrs.next().unwrap(),
         Err(e) => {
-            eprintln!("Ping request could not find host {}. Please check the name and try again.", strip_port(&host));
+            eprintln!(
+                "Ping request could not find host {}. Please check the name and try again.",
+                strip_port(&host)
+            );
             exit(-1);
-        },
+        }
     };
     unreachable!()
 }
@@ -60,7 +63,7 @@ fn strip_port(s: &str) -> &str {
         .unwrap_or(s)
 }
 
-fn ping(addr: &SocketAddr) -> Result<(i64, Duration)> {
+fn ping(addr: &SocketAddr) -> Result<(usize, i64, Duration)> {
     let mut stream = TcpStream::connect(addr)?;
     stream.write_packet(
         &mut HandshakePacket {
@@ -73,7 +76,8 @@ fn ping(addr: &SocketAddr) -> Result<(i64, Duration)> {
     );
     stream.write_packet(&mut PingRquestPacket {}.encode()?);
 
-    let response = PingResponsePacket::decode(&stream.read_packet()?)?;
+    let first_packet = stream.read_packet()?;
+    let response = PingResponsePacket::decode(&first_packet)?;
 
     // Ping <-> Pong
     let start = Instant::now();
@@ -85,7 +89,8 @@ fn ping(addr: &SocketAddr) -> Result<(i64, Duration)> {
     stream.read_packet(); // The Pong code does not need to be verified.
     let elapsed = start.elapsed();
 
-    let j: Value = serde_json::from_str(&response.content)?;
-    let online = j["players"]["online"].as_i64().unwrap_or(-1);
-    Ok((online, elapsed))
+    let len = first_packet.len();
+    let json: Value = serde_json::from_str(&response.content)?;
+    let online = json["players"]["online"].as_i64().unwrap_or(-1);
+    Ok((get_varint_length(len) + len + 10 /* Pong size */, online, elapsed))
 }

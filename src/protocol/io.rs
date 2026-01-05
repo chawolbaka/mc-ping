@@ -72,3 +72,19 @@ pub trait MinecraftWriteExt: Write {
         Ok(())
     }
 }
+
+
+pub fn get_varint_length(value: usize) -> usize {
+    let temp = value as u32;
+    if (temp & 0xFFFF_FF80) == 0 {
+        1
+    } else if (temp >> 14) == 0 {
+        2
+    } else if (temp >> 21) == 0 {
+        3
+    } else if (temp >> 28) == 0 {
+        4
+    } else {
+        5
+    }
+}
