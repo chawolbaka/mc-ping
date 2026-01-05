@@ -66,7 +66,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo build --release --locked --target "${{ matrix.target }}"
+          cargo build --release --target "${{ matrix.target }}"
 
       # 统一把产物复制到 dist/ 下，并重命名为带 target 的单文件
       - name: Prepare single-file artifact (unix)
