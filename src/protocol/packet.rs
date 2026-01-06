@@ -1,4 +1,4 @@
-use std::io::{self, ErrorKind, Read, Result, Write};
+use std::io::{self, ErrorKind, Result, Write};
 
 use crate::protocol::io::{MinecraftReadExt, MinecraftWriteExt};
 
@@ -8,6 +8,8 @@ const PING_REQUEST_PACKET_ID: u8 = 0;
 const PING_RESPONSE_PACKET_ID: u8 = 0;
 const PING_PACKET_ID: u8 = 1;
 const PONG_PACKET_ID: u8 = 1;
+
+
 pub trait Packet {
     fn encode(&self) -> Result<Vec<u8>>;
     fn decode(packet: &[u8]) -> Result<Self>

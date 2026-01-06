@@ -1,8 +1,4 @@
-use core::num;
-use std::{
-    io::{self, ErrorKind, Read, Result, Write},
-    net::TcpStream,
-};
+use std::io::{self, ErrorKind, Read, Result, Write};
 
 impl<R: Read + ?Sized> MinecraftReadExt for R {}
 impl<W: Write + ?Sized> MinecraftWriteExt for W {}
@@ -18,7 +14,7 @@ pub trait MinecraftReadExt: Read {
     }
     fn read_unsigned_short(&mut self) -> Result<u16> {
         let mut buf = [0u8; 2];
-        self.read_exact(&mut buf);
+        self.read_exact(&mut buf)?;
         Ok(u16::from_be_bytes(buf))
     }
 
