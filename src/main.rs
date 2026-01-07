@@ -1,5 +1,6 @@
 mod protocol;
 use clap::Parser;
+use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
@@ -19,6 +20,10 @@ struct Args {
     #[arg(short = 'c', long, default_value_t = 4)]
     count: u32,
 
+    /// Timeout for each request in seconds
+    #[arg(short = 't', long, default_value_t = 8.0)]
+    timeout: f64,
+
     /// Interval between requests in seconds
     #[arg(short = 'i', long, default_value_t = 0.0)]
     interval: f64,
@@ -27,16 +32,18 @@ struct Args {
     #[arg(short = 'j', long, default_value_t = false)]
     json: bool,
 
+
 }
 
 fn main() {
     let args = Args::parse();
     let addr = resolve_host(&args.target);
+    let timeout = Duration::from_secs_f64(args.timeout);
     for seq in 0..args.count {
-        match ping(strip_port(&args.target), &addr) {
+        match ping(strip_port(&args.target), &addr, timeout) {
             Ok(r) => {
                 if args.json {
-                    println!("{}",r.json);            
+                    println!("{}", r.json);            
                 }
                 else {   
                     let mut info = String::from_str(&format!(
@@ -54,7 +61,15 @@ fn main() {
                     println!("{info}");                    
                 }
             },
-            Err(e) => eprintln!("{}", e),
+            Err(e) => {
+                if  e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                   eprintln!("Request timed out.");
+                }
+                else {
+                    eprintln!("{}", e)
+                }
+
+            },
         }
 
         if seq + 1 < args.count && args.interval > 0.0 {
