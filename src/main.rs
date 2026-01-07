@@ -22,6 +22,11 @@ struct Args {
     /// Interval between requests in seconds
     #[arg(short = 'i', long, default_value_t = 0.0)]
     interval: f64,
+
+    /// Output results in JSON format
+    #[arg(short = 'j', long, default_value_t = false)]
+    json: bool,
+
 }
 
 fn main() {
@@ -30,19 +35,24 @@ fn main() {
     for seq in 0..args.count {
         match ping(strip_port(&args.target), &addr) {
             Ok(r) => {
-                let mut info = String::from_str(&format!(
-                    "{} bytes from {}: seq={} ", r.received_bytes, addr.ip(), seq)).unwrap();
-
-                if let Some(onlines) = r.online {
-                    info.push_str(&format!("onlines={} ", onlines));
+                if args.json {
+                    println!("{}",r.json);            
                 }
-
-                if let Some(mods) = r.mods {
-                    info.push_str(&format!("mods={} ", mods));
+                else {   
+                    let mut info = String::from_str(&format!(
+                        "{} bytes from {}: seq={} ", r.received_bytes, addr.ip(), seq)).unwrap();
+    
+                    if let Some(onlines) = r.online {
+                        info.push_str(&format!("onlines={} ", onlines));
+                    }
+    
+                    if let Some(mods) = r.mods {
+                        info.push_str(&format!("mods={} ", mods));
+                    }
+    
+                    info.push_str(&format!("time={:?}", r.elapsed));
+                    println!("{info}");                    
                 }
-
-                info.push_str(&format!("time={:?}", r.elapsed));
-                println!("{info}");
             },
             Err(e) => eprintln!("{}", e),
         }

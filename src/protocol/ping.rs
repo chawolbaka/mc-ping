@@ -7,9 +7,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub struct PingReport {
     pub received_bytes: usize,
-    pub online: Option<i64>,
+    pub online: Option<i64>, // some server many return a negative number
     pub mods: Option<usize>,
     pub elapsed: Duration,
+    pub json: String
 }
 
 pub fn ping(host: &str, addr: &SocketAddr) -> Result<PingReport> {
@@ -49,5 +50,6 @@ pub fn ping(host: &str, addr: &SocketAddr) -> Result<PingReport> {
         .and_then(|list| list.as_array())
         .map(|arr| arr.len()),
         elapsed: elapsed,
+        json: response.content
     })
 }
