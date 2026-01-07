@@ -3,6 +3,8 @@ use clap::Parser;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
+use std::thread;
+use std::time::Duration;
 use protocol::ping::*;
 
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
@@ -16,6 +18,10 @@ struct Args {
     /// Number of mc-ping requests to send
     #[arg(short = 'c', long, default_value_t = 4)]
     count: u32,
+
+    /// Interval between requests in seconds
+    #[arg(short = 'i', long, default_value_t = 0.0)]
+    interval: f64,
 }
 
 fn main() {
@@ -39,6 +45,10 @@ fn main() {
                 println!("{info}");
             },
             Err(e) => eprintln!("{}", e),
+        }
+
+        if seq + 1 < args.count && args.interval > 0.0 {
+            thread::sleep(Duration::from_secs_f64(args.interval));
         }
     }
 }
