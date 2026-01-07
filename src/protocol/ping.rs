@@ -1,7 +1,7 @@
 use crate::protocol::io::*;
 use crate::protocol::packet::*;
 use serde_json::Value;
-use std::io::{Result, Write};
+use std::io::{Result};
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -34,7 +34,7 @@ pub fn ping(host: &str, addr: &SocketAddr) -> Result<PingReport> {
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
         .as_secs();
-    stream.write_all(&mut PingPacket { code: time }.encode()?)?;
+    stream.write_packet(&mut PingPacket { code: time }.encode()?)?;
     stream.read_packet()?; // The Pong code does not need to be verified.
     let elapsed = start.elapsed();
 
