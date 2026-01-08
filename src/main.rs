@@ -1,12 +1,14 @@
 mod protocol;
 use clap::Parser;
+use protocol::ping::*;
 use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use protocol::ping::*;
+
+use crate::protocol::io::get_varint_length;
 
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
@@ -31,45 +33,55 @@ struct Args {
     /// Output results in JSON format
     #[arg(short = 'j', long, default_value_t = false)]
     json: bool,
-
-
 }
 
 fn main() {
     let args = Args::parse();
     let addr = resolve_host(&args.target);
+    let hsot = strip_port(&args.target);
     let timeout = Duration::from_secs_f64(args.timeout);
+
+    let hadnshake_packet_len = 1 + 1 + get_varint_length(hsot.len()) + hsot.len() + 2 + 1;
+    println!(
+        "PING {} ({}) {} bytes of data.",
+        args.target,
+        addr,
+        get_varint_length(hadnshake_packet_len) + hadnshake_packet_len + 2 + 10
+    );
+
     for seq in 0..args.count {
-        match ping(strip_port(&args.target), &addr, timeout) {
+        match ping(hsot, &addr, timeout) {
             Ok(r) => {
                 if args.json {
-                    println!("{}", r.json);            
-                }
-                else {   
+                    println!("{}", r.json);
+                } else {
                     let mut info = String::from_str(&format!(
-                        "{} bytes from {}: seq={} ", r.received_bytes, addr.ip(), seq)).unwrap();
-    
-                    if let Some(onlines) = r.online {
+                        "{} bytes from {}: seq={} ",
+                        r.received_bytes,
+                        addr.ip(),
+                        seq
+                    ))
+                    .unwrap();
+
+                    if let Some(onlines) = r.onlines {
                         info.push_str(&format!("onlines={} ", onlines));
                     }
-    
+
                     if let Some(mods) = r.mods {
                         info.push_str(&format!("mods={} ", mods));
                     }
-    
+
                     info.push_str(&format!("time={:?}", r.elapsed));
-                    println!("{info}");                    
+                    println!("{info}");
                 }
-            },
+            }
             Err(e) => {
-                if  e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
-                   eprintln!("Request timed out.");
-                }
-                else {
+                if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
+                    eprintln!("Request timed out.");
+                } else {
                     eprintln!("{}", e)
                 }
-
-            },
+            }
         }
 
         if seq + 1 < args.count && args.interval > 0.0 {
@@ -77,8 +89,6 @@ fn main() {
         }
     }
 }
-
-
 
 fn resolve_host(host: &str) -> SocketAddr {
     let mut host = String::from_str(host).unwrap();
