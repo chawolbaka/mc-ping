@@ -85,7 +85,7 @@ fn main() {
                         "{} bytes from {}: seq={} ",
                         r.received_bytes,
                         addr.ip(),
-                        seq
+                        seq + 1
                     ))
                     .unwrap();
 
