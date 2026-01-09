@@ -8,6 +8,9 @@ use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
 #[derive(Parser, Debug)]
@@ -55,8 +58,20 @@ fn main() {
         addr,
         seek_send_bytes(host)
     );
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+
     let start = Instant::now();
     for seq in 0..args.count {
+        if !running.load(Ordering::SeqCst) {
+            break;
+        }
+
         total.transmitted += 1;
         match ping(host, &addr, timeout) {
             Ok(r) => {
@@ -94,15 +109,18 @@ fn main() {
                 }
             }
         }
-
+        if !running.load(Ordering::SeqCst) {
+            break;
+        }
         if seq + 1 < args.count && args.interval > 0.0 {
             thread::sleep(Duration::from_secs_f64(args.interval));
         }
     }
     total.time = start.elapsed();
-
-    println!("\n--- {host} mc ping statistics ---");
-    println!("{}", total.format());
+    if total.transmitted > 0 {
+        println!("\n--- {host} mc ping statistics ---");
+        println!("{}", total.format());
+    }
 }
 
 fn resolve_host(host: &str) -> SocketAddr {
@@ -142,11 +160,10 @@ impl Total {
         let avg = sum_ms / self.rtts.len() as f64;
 
         let mdev = (self.rtts.iter()
-        .map(|d| {
-            let diff = (d.as_secs_f64() * 1000.0) - avg;
-            diff * diff
-        }).sum::<f64>() / self.rtts.len() as f64).sqrt();
-    
+            .map(|d| {
+                let diff = (d.as_secs_f64() * 1000.0) - avg;
+                diff * diff
+            }).sum::<f64>() / self.rtts.len() as f64).sqrt();
 
         format!(
             "{} packets transmitted, {} received, {:.1}% packet loss, time {}ms\n\
