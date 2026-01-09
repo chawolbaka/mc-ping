@@ -6,9 +6,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::process::exit;
 use std::str::FromStr;
 use std::thread;
-use std::time::Duration;
-
-use crate::protocol::io::get_varint_length;
+use std::time::{Duration, Instant};
 
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
@@ -19,7 +17,7 @@ struct Args {
     target: String,
 
     /// Number of mc-ping requests to send
-    #[arg(short = 'c', long, default_value_t = 4)]
+    #[arg(short = 'c', long, default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..))]
     count: u32,
 
     /// Timeout for each request in seconds
@@ -35,23 +33,36 @@ struct Args {
     json: bool,
 }
 
+#[derive(Debug, Default)]
+struct Total {
+    transmitted: usize,
+    received: usize,
+    time: Duration,
+    rtts: Vec<Duration>,
+}
+
 fn main() {
     let args = Args::parse();
     let addr = resolve_host(&args.target);
-    let hsot = strip_port(&args.target);
+    let host = strip_port(&args.target);
     let timeout = Duration::from_secs_f64(args.timeout);
 
-    let hadnshake_packet_len = 1 + 1 + get_varint_length(hsot.len()) + hsot.len() + 2 + 1;
+    let mut total = Total::default();
+
     println!(
         "PING {} ({}) {} bytes of data.",
         args.target,
         addr,
-        get_varint_length(hadnshake_packet_len) + hadnshake_packet_len + 2 + 10
+        seek_send_bytes(host)
     );
-
+    let start = Instant::now();
     for seq in 0..args.count {
-        match ping(hsot, &addr, timeout) {
+        total.transmitted += 1;
+        match ping(host, &addr, timeout) {
             Ok(r) => {
+                total.received += 1;
+                total.rtts.push(r.elapsed);
+
                 if args.json {
                     println!("{}", r.json);
                 } else {
@@ -71,7 +82,7 @@ fn main() {
                         info.push_str(&format!("mods={} ", mods));
                     }
 
-                    info.push_str(&format!("time={:?}", r.elapsed));
+                    info.push_str(&format!("time={}ms", r.elapsed.as_millis()));
                     println!("{info}");
                 }
             }
@@ -88,6 +99,10 @@ fn main() {
             thread::sleep(Duration::from_secs_f64(args.interval));
         }
     }
+    total.time = start.elapsed();
+
+    println!("\n--- {host} mc ping statistics ---");
+    println!("{}", total.format());
 }
 
 fn resolve_host(host: &str) -> SocketAddr {
@@ -103,7 +118,7 @@ fn resolve_host(host: &str) -> SocketAddr {
                 "Ping request could not find host {}. Please check the name and try again.",
                 strip_port(&host)
             );
-            exit(-1);
+            exit(0);
         }
     };
 }
@@ -113,4 +128,37 @@ fn strip_port(s: &str) -> &str {
         .filter(|(_, port)| port.chars().all(|c| c.is_ascii_digit()))
         .map(|(host, _)| host)
         .unwrap_or(s)
+}
+
+impl Total {
+    fn format(&self) -> String {
+        let transmitted = self.transmitted;
+        let received = self.received;
+        let loss_pct = (transmitted - received) as f64 * 100.0 / transmitted as f64;
+
+        let min = self.rtts.iter().min().unwrap().as_secs_f64() * 1000.0;
+        let max = self.rtts.iter().max().unwrap().as_secs_f64() * 1000.0;
+        let sum_ms: f64 = self.rtts.iter().map(|d| d.as_secs_f64() * 1000.0).sum();
+        let avg = sum_ms / self.rtts.len() as f64;
+
+        let mdev = (self.rtts.iter()
+        .map(|d| {
+            let diff = (d.as_secs_f64() * 1000.0) - avg;
+            diff * diff
+        }).sum::<f64>() / self.rtts.len() as f64).sqrt();
+    
+
+        format!(
+            "{} packets transmitted, {} received, {:.1}% packet loss, time {}ms\n\
+             rtt min/avg/max/mdev = {:.3}/{:.3}/{:.3}/{:.3}ms\n",
+            transmitted,
+            received,
+            loss_pct,
+            self.time.as_millis(),
+            min,
+            avg,
+            max,
+            mdev,
+        )
+    }
 }

@@ -57,3 +57,8 @@ pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration) -> Result<PingRepo
         json: response.content,
     })
 }
+
+pub fn seek_send_bytes(host: &str) -> usize {
+    let hadnshake_packet_len = 1 + 1 + get_varint_length(host.len()) + host.len() + 2 + 1;
+    get_varint_length(hadnshake_packet_len) + hadnshake_packet_len + 2 + 10
+}
