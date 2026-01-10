@@ -85,6 +85,59 @@ pub fn get_varint_length(value: usize) -> usize {
     }
 }
 
+
+// 该方法完全由AI编写，涉及java和rust对位运算可能存在的差异，我对自己的水平没有信心。
+pub fn decode_forge_d(units: &[u16]) -> Result<Vec<u8>> {
+    if units.len() < 2 {
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            "input too short: need at least 2 UTF-16 code units for size header",
+        ));
+    }
+
+    // size = size0 | (size1 << 15)
+    let size0 = units[0] as u32;
+    let size1 = units[1] as u32;
+    let size = (size0 | (size1 << 15)) as usize;
+
+    // 等价于 Unpooled.buffer(size): 初始容量 size，但允许继续增长
+    let mut out = Vec::<u8>::new();
+    out.try_reserve(size).map_err(|_| {
+        io::Error::new(ErrorKind::OutOfMemory, "unable to allocate output buffer")
+    })?;
+
+    let mut string_index: usize = 2;
+    let mut buffer: u32 = 0;     // Java 注释：最多 ~22 bits，u32 足够
+    let mut bits_in_buf: i32 = 0;
+
+    while string_index < units.len() {
+        // 与 Java 完全一致：只要 bitsInBuf >= 8 就持续 writeByte，
+        // 不检查是否超过 size（因此可能 out.len() > size）
+        while bits_in_buf >= 8 {
+            out.push((buffer & 0xFF) as u8);
+            buffer >>= 8;        // 等价 Java >>>= 8
+            bits_in_buf -= 8;
+        }
+
+        let c = units[string_index] as u32;
+        // 此处 bits_in_buf 理论上在 [0,7]，移位安全
+        buffer |= (c & 0x7FFF) << (bits_in_buf as u32);
+        bits_in_buf += 15;
+        string_index += 1;
+    }
+
+    // write any leftovers: 仅当当前可读字节数 < size 时，继续写到 size
+    // 若主循环已写出 > size，则这里不会截断（严格模拟 ByteBuf 逻辑）
+    while out.len() < size {
+        out.push((buffer & 0xFF) as u8);
+        buffer >>= 8;
+        bits_in_buf -= 8; // 保持与 Java 一致（即便变负也无所谓，后续不再使用）
+    }
+
+    Ok(out)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;

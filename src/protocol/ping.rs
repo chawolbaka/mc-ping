@@ -48,11 +48,7 @@ pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration) -> Result<PingRepo
     Ok(PingReport {
         received_bytes: get_varint_length(len) + len + 10, /* Pong size */
         onlines: json["players"]["online"].as_i64(),
-        mods: json
-            .get("modinfo")
-            .and_then(|m| m.get("modList"))
-            .and_then(|list| list.as_array())
-            .map(|arr| arr.len()),
+        mods: read_forge_mods(&json)?,
         elapsed: elapsed,
         json: response.content,
     })
@@ -61,4 +57,26 @@ pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration) -> Result<PingRepo
 pub fn seek_send_bytes(host: &str) -> usize {
     let hadnshake_packet_len = 1 + 1 + get_varint_length(host.len()) + host.len() + 2 + 1;
     get_varint_length(hadnshake_packet_len) + hadnshake_packet_len + 2 + 10
+}
+
+
+// ref: src/main/java/net/minecraftforge/network/ServerStatusPing.java (1.20.x)
+fn read_forge_mods(json: &Value) -> Result<Option<usize>> {
+    if let Some(d) = json.get("forgeData").and_then(|m| m.get("d")) {
+        let units: Vec<u16> = d.as_str().unwrap_or_default().encode_utf16().collect();
+        if units.len() < 3 {
+            return Ok(None);
+        }
+        
+        let mut d  = &decode_forge_d(&units)?[1..];
+        let size = d.read_unsigned_short()? as usize;
+        Ok(Some(size))
+    }
+    else {
+        Ok(json
+            .get("modinfo")
+            .and_then(|m| m.get("modList"))
+            .and_then(|list| list.as_array())
+            .map(|arr| arr.len()))        
+    }
 }
