@@ -150,32 +150,43 @@ fn strip_port(s: &str) -> &str {
 
 impl Total {
     fn format(&self) -> String {
+        let mut s = String::new();
+
         let transmitted = self.transmitted;
         let received = self.received;
         let loss_pct = (transmitted - received) as f64 * 100.0 / transmitted as f64;
 
-        let min = self.rtts.iter().min().unwrap().as_secs_f64() * 1000.0;
-        let max = self.rtts.iter().max().unwrap().as_secs_f64() * 1000.0;
-        let sum_ms: f64 = self.rtts.iter().map(|d| d.as_secs_f64() * 1000.0).sum();
-        let avg = sum_ms / self.rtts.len() as f64;
-
-        let mdev = (self.rtts.iter()
-            .map(|d| {
-                let diff = (d.as_secs_f64() * 1000.0) - avg;
-                diff * diff
-            }).sum::<f64>() / self.rtts.len() as f64).sqrt();
-
-        format!(
-            "{} packets transmitted, {} received, {:.1}% packet loss, time {}ms\n\
-             rtt min/avg/max/mdev = {:.3}/{:.3}/{:.3}/{:.3}ms\n",
+        s.push_str(&format!(
+            "{} packets transmitted, {} received, {:.1}% packet loss, time {}ms\n",
             transmitted,
             received,
             loss_pct,
-            self.time.as_millis(),
-            min,
-            avg,
-            max,
-            mdev,
-        )
+            self.time.as_millis()
+        ));
+
+        if self.rtts.len() > 0 {
+            let min = self.rtts.iter().min().unwrap().as_secs_f64() * 1000.0;
+            let max = self.rtts.iter().max().unwrap().as_secs_f64() * 1000.0;
+            let sum_ms: f64 = self.rtts.iter().map(|d| d.as_secs_f64() * 1000.0).sum();
+            let avg = sum_ms / self.rtts.len() as f64;
+
+            let mdev = (self
+                .rtts
+                .iter()
+                .map(|d| {
+                    let diff = (d.as_secs_f64() * 1000.0) - avg;
+                    diff * diff
+                })
+                .sum::<f64>()
+                / self.rtts.len() as f64)
+                .sqrt();
+
+            s.push_str(&format!(
+                "rtt min/avg/max/mdev = {:.3}/{:.3}/{:.3}/{:.3}ms\n",
+                min, avg, max, mdev,
+            ));
+        }
+
+        s
     }
 }
