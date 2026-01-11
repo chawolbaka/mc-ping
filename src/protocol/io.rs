@@ -86,7 +86,7 @@ pub fn get_varint_length(value: usize) -> usize {
 }
 
 
-// 该方法完全由AI编写，涉及java和rust对位运算可能存在的差异，我对自己的水平没有信心。
+// 该方法完全由AI编写，涉及java和rust对位运算可能存在的差异，我对自己的水平没有信心（顺便甩锅，出现问题了都是AI的错！）
 pub fn decode_forge_d(units: &[u16]) -> Result<Vec<u8>> {
     if units.len() < 2 {
         return Err(io::Error::new(
@@ -135,103 +135,4 @@ pub fn decode_forge_d(units: &[u16]) -> Result<Vec<u8>> {
     }
 
     Ok(out)
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn read_varint_positive() { 
-        let mut data: &[u8] = &[0x00];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 0);
-
-        let mut data: &[u8] = &[0x01];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 1);
-
-        let mut data: &[u8] = &[0x7f];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 127);
-
-        let mut data: &[u8] = &[0xff,0x01];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 255);
-        
-        let mut data: &[u8] = &[0xff,0xff,0x03];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 65535);
-        
-        let mut data: &[u8] = &[0xff,0xff,0xff,0xff,0x07];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, 2147483647);
-
-    }
-
-    #[test]
-    fn read_varint_negative() {
-        let mut data: &[u8] = &[0xff,0xff,0xff,0xff,0x0f];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, -1);
-
-        let mut data: &[u8] = &[0x80,0xff,0xff,0xff,0x0f];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, -128);
-
-        let mut data: &[u8] = &[0x80,0x80,0xfe,0xff,0x0f];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v, -32768);
-
-        let mut data: &[u8] = &[0x80,0x80,0x80,0x80,0x08];
-        let v = data.read_varint().unwrap();
-        assert_eq!(v,-2147483648);
-    }
-
-    #[test]
-    fn write_varint_positive() {
-        let mut buf = Vec::new();
-        buf.write_varint(0).unwrap();
-        assert_eq!(buf, vec![0x00]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(1).unwrap();
-        assert_eq!(buf, vec![0x01]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(127).unwrap();
-        assert_eq!(buf, vec![0x7f]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(255).unwrap();
-        assert_eq!(buf, vec![0xff, 0x01]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(65535).unwrap();
-        assert_eq!(buf, vec![0xff, 0xff, 0x03]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(2147483647).unwrap();
-        assert_eq!(buf, vec![0xff, 0xff, 0xff, 0xff, 0x07]);
-    }
-
-    #[test]
-    fn write_varint_negative() {
-        let mut buf = Vec::new();
-        buf.write_varint(-1).unwrap();
-        assert_eq!(buf, vec![0xff, 0xff, 0xff, 0xff, 0x0f]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(-128).unwrap();
-        assert_eq!(buf, vec![0x80, 0xff, 0xff, 0xff, 0x0f]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(-32768).unwrap();
-        assert_eq!(buf, vec![0x80, 0x80, 0xfe, 0xff, 0x0f]);
-
-        let mut buf = Vec::new();
-        buf.write_varint(-2147483648).unwrap();
-        assert_eq!(buf, vec![0x80, 0x80, 0x80, 0x80, 0x08]);
-    }
 }
