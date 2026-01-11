@@ -32,7 +32,7 @@ struct Args {
     interval: f64,
 
     /// Output results in JSON format
-    #[arg(short = 'j', long, default_value_t = false)]
+    #[arg(short = 'j', long, default_value_t = false, conflicts_with = "count")]
     json: bool,
 }
 
@@ -80,6 +80,7 @@ fn main() {
 
                 if args.json {
                     println!("{}", r.json);
+                    return;
                 } else {
                     let mut info = String::from_str(&format!(
                         "{} bytes from {}: seq={} ",
