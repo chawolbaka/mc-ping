@@ -49,23 +49,18 @@ fn main() {
     let addr = resolve_host(&args.target);
     let host = strip_port(&args.target);
     let timeout = Duration::from_secs_f64(args.timeout);
-
     let mut total = Total::default();
 
-    println!(
-        "PING {} ({}) {} bytes of data.",
-        args.target,
-        addr,
-        seek_send_bytes(host)
-    );
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
-
+    if !args.json {
+        println!(
+            "PING {} ({}) {} bytes of data.",
+            args.target,
+            addr,
+            seek_send_bytes(host)
+        );
+    }
+    
+    let running = set_ctrlc();
     let start = Instant::now();
     for seq in 0..args.count {
         if !running.load(Ordering::SeqCst) {
@@ -118,10 +113,21 @@ fn main() {
         }
     }
     total.time = start.elapsed();
-    if total.transmitted > 0 {
+    if !args.json && total.transmitted > 0 {
         println!("\n--- {host} mc ping statistics ---");
         println!("{}", total.format());
     }
+}
+
+fn set_ctrlc() -> Arc<AtomicBool> {
+    let arc = Arc::new(AtomicBool::new(true));
+    let r = arc.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+    arc
 }
 
 fn resolve_host(host: &str) -> SocketAddr {
