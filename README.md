@@ -4,7 +4,7 @@ A blazingly 💧 slow 🐌 software provides a command-line tool for checking Mi
 **Example**
 ```bash
 $ mc-ping mc.example.net  
-PING mc.example.net 233.233.233.233:25565) 23 bytes of data.
+PING mc.example.net (233.233.233.233:25565) 23 bytes of data.
 2333 bytes from 233.233.233.233: seq=1 onlines=2 time=2ms
 2333 bytes from 233.233.233.233: seq=2 onlines=3 time=3ms
 2333 bytes from 233.233.233.233: seq=3 onlines=3 time=3ms
