@@ -1,5 +1,5 @@
 mod protocol;
-use clap::Parser;
+use clap::{Parser};
 use protocol::ping::*;
 use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs};
@@ -20,7 +20,7 @@ struct Args {
     target: String,
 
     /// Number of mc-ping requests to send
-    #[arg(short = 'c', long, default_value_t = 4, value_parser = clap::value_parser!(u32).range(1..))]
+    #[arg(short = 'c', long, default_value_t = 4)]
     count: u32,
 
     /// Timeout for each request in seconds
@@ -46,6 +46,12 @@ struct Total {
 
 fn main() {
     let args = Args::parse();
+    if let Some(s) = check_args(&args) {
+        println!("{s}");
+        return;
+    }
+
+
     let addr = resolve_host(&args.target);
     let host = strip_port(&args.target);
     let timeout = Duration::from_secs_f64(args.timeout);
@@ -117,6 +123,19 @@ fn main() {
         println!("\n--- {host} mc ping statistics ---");
         println!("{}", total.format());
     }
+}
+
+fn check_args(args: &Args) -> Option<&'static str> {
+    if args.count == 0 {
+        return Some("ping: bad number of packets to transmit.");
+    }
+    if args.interval < 0.0 {
+        return Some("ping: bad timing interval");
+    }
+    if args.timeout <= 0.0 {
+        return Some("ping: bad timeout.");
+    }
+    None
 }
 
 fn set_ctrlc() -> Arc<AtomicBool> {
