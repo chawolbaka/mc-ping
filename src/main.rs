@@ -1,4 +1,6 @@
 mod protocol;
+use clap::builder::Styles;
+use clap::builder::styling::AnsiColor;
 use clap::{Parser};
 use protocol::ping::*;
 use std::io::ErrorKind;
@@ -14,7 +16,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 const MINECRAFT_DEFAULT_PORT: &'static str = ":25565";
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
+#[command(version, about, long_about = None, styles=get_styles())]
 struct Args {
     /// Hostname or IP address to ping
     target: String,
@@ -215,4 +217,13 @@ impl Total {
 
         s
     }
+}
+
+
+pub fn get_styles() -> clap::builder::Styles {
+    Styles::styled()
+    .header(AnsiColor::BrightGreen.on_default())
+    .usage(AnsiColor::BrightGreen.on_default())
+    .literal(AnsiColor::BrightCyan.on_default())
+    .placeholder(AnsiColor::Cyan.on_default())
 }
