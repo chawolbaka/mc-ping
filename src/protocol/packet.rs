@@ -2,13 +2,12 @@ use std::io::{self, ErrorKind, Result, Write};
 
 use crate::protocol::io::{MinecraftReadExt, MinecraftWriteExt};
 
-// Altough packet id are defined as varint, but in Server List Ping, they only occupy 1 byte, so using u8 is suffcient.
+// Although packet ids are defined as varints, in Server List Ping they only occupy 1 byte, so u8 is sufficient.
 const HANDSHAKE_PACKET_ID: u8 = 0;
 const PING_REQUEST_PACKET_ID: u8 = 0;
 const PING_RESPONSE_PACKET_ID: u8 = 0;
 const PING_PACKET_ID: u8 = 1;
 const PONG_PACKET_ID: u8 = 1;
-
 
 pub trait Packet {
     // Why did I restrict it to Vec<u8> and &[u8]? Because using it with TcpStream is too slow.
@@ -18,11 +17,27 @@ pub trait Packet {
         Self: Sized;
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum HandshakeState {
     Status = 1,
     Login = 2,
     Transfer = 3,
+}
+
+impl TryFrom<i32> for HandshakeState {
+    type Error = io::Error;
+
+    fn try_from(value: i32) -> Result<Self> {
+        match value {
+            1 => Ok(Self::Status),
+            2 => Ok(Self::Login),
+            3 => Ok(Self::Transfer),
+            other => Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Invalid HandshakeState {other}"),
+            )),
+        }
+    }
 }
 
 pub struct HandshakePacket {
@@ -32,7 +47,7 @@ pub struct HandshakePacket {
     pub next_state: HandshakeState,
 }
 
-pub struct PingRquestPacket {}
+pub struct PingRequestPacket;
 
 pub struct PingResponsePacket {
     pub content: String,
@@ -60,28 +75,23 @@ impl Packet for HandshakePacket {
     fn decode(packet: &[u8]) -> Result<Self> {
         check_id(packet, HANDSHAKE_PACKET_ID)?;
         let mut packet = &packet[1..];
-        Ok(Self { 
+        Ok(Self {
             protocol_version: packet.read_varint()?,
             server_address: packet.read_string()?,
             server_port: packet.read_unsigned_short()?,
-            next_state: match packet.read_varint()? {
-                1 => HandshakeState::Status,
-                2 => HandshakeState::Login,
-                3 => HandshakeState::Transfer,
-                other => return Err(io::Error::new(ErrorKind::InvalidData, format!("Invaild HandshakeState {other}"))),
-            }
+            next_state: HandshakeState::try_from(packet.read_varint()?)?,
         })
     }
 }
 
-impl Packet for PingRquestPacket {
+impl Packet for PingRequestPacket {
     fn encode(&self) -> Result<Vec<u8>> {
         Ok(vec![PING_REQUEST_PACKET_ID])
     }
 
     fn decode(packet: &[u8]) -> Result<Self> {
         check_id(packet, PING_REQUEST_PACKET_ID)?;
-        Ok(Self {  })
+        Ok(Self)
     }
 }
 
@@ -121,16 +131,13 @@ impl Packet for PongPacket {
     }
 }
 
-
-
-
 #[inline]
 fn check_id(packet: &[u8], id: u8) -> Result<()> {
-    if packet.len() == 0 {
+    if packet.is_empty() {
         return Err(io::Error::new(ErrorKind::InvalidData, "Empty packet"));
     }
     if packet[0] != id {
-        return Err(io::Error::new(ErrorKind::InvalidData, "Invaild packet id"));
+        return Err(io::Error::new(ErrorKind::InvalidData, "Invalid packet id"));
     }
     Ok(())
 }
@@ -146,7 +153,10 @@ fn encode_u64_packet(id: u8, code: u64) -> Vec<u8> {
 #[inline]
 fn decode_u64_packet(packet: &[u8], expected_id: u8, name: &'static str) -> Result<u64> {
     if packet.len() != 9 {
-        return Err(io::Error::new(ErrorKind::InvalidData, format!("Invaild {name} packet length")));
+        return Err(io::Error::new(
+            ErrorKind::InvalidData,
+            format!("Invalid {name} packet length"),
+        ));
     }
 
     check_id(packet, expected_id)?;
