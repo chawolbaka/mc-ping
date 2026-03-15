@@ -23,6 +23,14 @@ pub struct Args {
     /// Output results in JSON format
     #[arg(short = 'j', long, default_value_t = false, conflicts_with = "count")]
     pub json: bool,
+
+    /// Force IPv4 DNS lookup
+    #[arg(short = '4', long, conflicts_with = "ipv6")]
+    pub ipv4: bool,
+
+    /// Force IPv6 DNS lookup
+    #[arg(short = '6', long, conflicts_with = "ipv4")]
+    pub ipv6: bool,
 }
 
 pub fn validate_args(args: &Args) -> Result<(), &'static str> {

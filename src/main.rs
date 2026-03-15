@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use cli::{validate_args, Args};
-use dns::{resolve_host, strip_port};
+use dns::{resolve_host_with_family, strip_port, IpFamily};
 use stats::Total;
 
 fn main() {
@@ -23,7 +23,15 @@ fn main() {
         return;
     }
 
-    let addr = match resolve_host(&args.target) {
+    let family = if args.ipv4 {
+        IpFamily::V4
+    } else if args.ipv6 {
+        IpFamily::V6
+    } else {
+        IpFamily::Any
+    };
+
+    let addr = match resolve_host_with_family(&args.target, family) {
         Ok(addr) => addr,
         Err(err) => {
             eprintln!("{err}");
