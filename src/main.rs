@@ -59,7 +59,7 @@ fn main() {
         }
 
         total.transmitted += 1;
-        match ping(host, &addr, timeout) {
+        match ping(host, &addr, timeout, args.verify) {
             Ok(r) => {
                 total.received += 1;
                 total.rtts.push(r.elapsed);

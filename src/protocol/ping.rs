@@ -1,9 +1,9 @@
 use crate::protocol::io::{decode_forge_d, seek_varint_length, MinecraftReadExt, MinecraftWriteExt};
 use crate::protocol::packet::{
-    HandshakePacket, HandshakeState, Packet, PingPacket, PingRequestPacket, PingResponsePacket,
+    HandshakePacket, HandshakeState, Packet, PingPacket, PingRequestPacket, PingResponsePacket, PongPacket,
 };
 use serde_json::Value;
-use std::io::Result;
+use std::io::{self, ErrorKind, Result};
 use std::net::{SocketAddr, TcpStream};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -17,7 +17,7 @@ pub struct PingReport {
     pub json: String,
 }
 
-pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration) -> Result<PingReport> {
+pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration, verify: bool) -> Result<PingReport> {
     let mut stream = TcpStream::connect_timeout(addr, timeout)?;
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
@@ -44,8 +44,11 @@ pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration) -> Result<PingRepo
         .expect("Time went backwards")
         .as_secs();
     stream.write_packet(&PingPacket { code: time }.encode()?)?;
-    stream.read_packet()?; // The Pong code does not need to be verified.
+    let pong_packet = stream.read_packet()?;
     let elapsed = start.elapsed();
+    if verify && PongPacket::decode(&pong_packet)?.code != time {
+        return Err(io::Error::new(ErrorKind::InvalidData, "Invalid pong code"));
+    }
 
     let len = first_packet.len();
     let json: Value = serde_json::from_str(&response.content)?;

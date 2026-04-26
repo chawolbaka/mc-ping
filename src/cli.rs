@@ -20,6 +20,10 @@ pub struct Args {
     #[arg(short = 'i', long, default_value_t = 0.0)]
     pub interval: f64,
 
+    /// Verify ping-pong code
+    #[arg(short = 'v', long, default_value_t = false)]
+    pub verify: bool,
+
     /// Output results in JSON format
     #[arg(short = 'j', long, default_value_t = false, conflicts_with = "count")]
     pub json: bool,
