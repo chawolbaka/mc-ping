@@ -6,69 +6,59 @@ mod protocol;
 use clap::Parser;
 use protocol::ping::{ping, seek_send_bytes};
 
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use cli::{validate_args, Args};
-use dns::{resolve_host_with_family, strip_port, IpFamily};
+use cli::Args;
+use dns::{resolve_host_with_family, strip_port};
 use stats::Total;
 
 fn main() {
     let args = Args::parse();
-    if let Err(message) = validate_args(&args) {
+    if let Err(message) = args.validate_args() {
         eprintln!("{message}");
         return;
     }
-
-    let family = if args.ipv4 {
-        IpFamily::V4
-    } else if args.ipv6 {
-        IpFamily::V6
-    } else {
-        IpFamily::Any
-    };
-
-    let addr = match resolve_host_with_family(&args.target, family) {
+    
+    let addr = match resolve_host_with_family(&args.target, args.get_ip_family()) {
         Ok(addr) => addr,
         Err(err) => {
             eprintln!("{err}");
             return;
         }
     };
+
     let host = strip_port(&args.target);
     let timeout = Duration::from_secs_f64(args.timeout);
-    let mut total = Total::default();
 
-    if !args.json {
-        println!(
-            "PING {} ({}) {} bytes of data.",
-            args.target,
-            addr,
-            seek_send_bytes(host)
-        );
+    if args.json {
+        match ping(host, &addr, timeout, args.verify) {
+            Ok(r) => println!("{}", r.json),
+            Err(e) => print_io_error(&e),
+        }
+        return;
     }
 
+
+    
+    println!("PING {} ({}) {} bytes of data.", args.target, addr, seek_send_bytes(host));
+    let mut total = Total::default();
     let running = set_ctrlc();
     let start = Instant::now();
+
     for seq in 0..args.count {
         if !running.load(Ordering::SeqCst) {
             break;
         }
 
         total.transmitted += 1;
-        match ping(host, &addr, timeout, args.verify) {
+        match ping(&host, &addr, timeout, args.verify) {
             Ok(r) => {
                 total.received += 1;
                 total.rtts.push(r.elapsed);
-
-                if args.json {
-                    println!("{}", r.json);
-                    return;
-                }
-
                 let mut info = format!(
                     "{} bytes from {}: seq={} ",
                     r.received_bytes,
@@ -87,14 +77,9 @@ fn main() {
                 info.push_str(&format!("time={}ms", r.elapsed.as_millis()));
                 println!("{info}");
             }
-            Err(e) => {
-                if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut {
-                    eprintln!("Request timed out.");
-                } else {
-                    eprintln!("{}", e)
-                }
-            }
+            Err(e) => print_io_error(&e),
         }
+
         if !running.load(Ordering::SeqCst) {
             break;
         }
@@ -103,11 +88,20 @@ fn main() {
         }
     }
     total.time = start.elapsed();
-    if !args.json && total.transmitted > 0 {
+    if total.transmitted > 0 {
         println!("\n--- {host} statistics ---");
         println!("{total}");
     }
 }
+
+fn print_io_error(error: &io::Error) {
+    if error.kind() == ErrorKind::WouldBlock || error.kind() == ErrorKind::TimedOut {
+        eprintln!("Request timed out.");
+    } else {
+        eprintln!("{}", error)
+    }
+}
+
 
 fn set_ctrlc() -> Arc<AtomicBool> {
     let arc = Arc::new(AtomicBool::new(true));

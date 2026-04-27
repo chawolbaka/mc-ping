@@ -1,6 +1,8 @@
-use clap::builder::styling::AnsiColor;
-use clap::builder::Styles;
 use clap::Parser;
+use clap::builder::Styles;
+use clap::builder::styling::AnsiColor;
+
+use crate::dns::IpFamily;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, styles=get_styles())]
@@ -37,17 +39,30 @@ pub struct Args {
     pub ipv6: bool,
 }
 
-pub fn validate_args(args: &Args) -> Result<(), &'static str> {
-    if args.count == 0 {
-        return Err("ping: bad number of packets to transmit.");
+impl Args {
+    
+    pub fn get_ip_family(&self) -> IpFamily {
+        if self.ipv4 {
+            return IpFamily::V4;
+        } else if self.ipv6 {
+            return IpFamily::V6;
+        } else {
+            return IpFamily::Any;
+        }
     }
-    if args.interval < 0.0 {
-        return Err("ping: bad timing interval");
-    }
-    if args.timeout <= 0.0 {
-        return Err("ping: bad timeout.");
-    }
-    Ok(())
+    
+    pub fn validate_args(&self) -> Result<(), &'static str> {
+        if self.count == 0 {
+            return Err("ping: bad number of packets to transmit.");
+        }
+        if self.interval < 0.0 {
+            return Err("ping: bad timing interval");
+        }
+        if self.timeout <= 0.0 {
+            return Err("ping: bad timeout.");
+        }
+        Ok(())
+    }   
 }
 
 fn get_styles() -> Styles {
