@@ -22,6 +22,14 @@ pub struct Args {
     #[arg(short = 'i', long, default_value_t = 0.0)]
     pub interval: f64,
 
+    /// server_address field in HandshakePacket
+    #[arg(short= 'a', long)]
+    pub server_address: Option<String>,
+
+    /// server_port field in HandshakePacket
+    #[arg(short= 'p', long)]
+    pub server_port: Option<u16>,
+
     /// Verify ping-pong code
     #[arg(short = 'v', long, default_value_t = false)]
     pub verify: bool,
@@ -37,6 +45,7 @@ pub struct Args {
     /// Force IPv6 DNS lookup
     #[arg(short = '6', long, conflicts_with = "ipv4")]
     pub ipv6: bool,
+
 }
 
 impl Args {

@@ -17,7 +17,7 @@ pub struct PingReport {
     pub json: String,
 }
 
-pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration, verify: bool) -> Result<PingReport> {
+pub fn ping(addr: &SocketAddr, host: &str, port: u16, timeout: Duration, verify: bool) -> Result<PingReport> {
     let mut stream = TcpStream::connect_timeout(addr, timeout)?;
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
@@ -26,7 +26,7 @@ pub fn ping(host: &str, addr: &SocketAddr, timeout: Duration, verify: bool) -> R
         &HandshakePacket {
             protocol_version: -1,
             server_address: host.to_string(),
-            server_port: addr.port(),
+            server_port: port,
             next_state: HandshakeState::Status,
         }
         .encode()?,

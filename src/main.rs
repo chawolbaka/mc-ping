@@ -18,24 +18,17 @@ use stats::Total;
 
 fn main() {
     let args = Args::parse();
-    if let Err(message) = args.validate_args() {
-        eprintln!("{message}");
-        return;
-    }
-    
-    let addr = match resolve_host_with_family(&args.target, args.get_ip_family()) {
-        Ok(addr) => addr,
-        Err(err) => {
-            eprintln!("{err}");
-            return;
-        }
-    };
 
-    let host = strip_port(&args.target);
+    // If a check error is encountered, just panic; I don't think formatting is necessary.
+    args.validate_args().unwrap();
+    let addr = resolve_host_with_family(&args.target, args.get_ip_family()).unwrap(); 
+    let host = args.server_address.as_deref().unwrap_or_else(|| strip_port(&args.target));
+    let port = args.server_port.unwrap_or_else(|| addr.port());
     let timeout = Duration::from_secs_f64(args.timeout);
 
+    // In json mode, just output json.
     if args.json {
-        match ping(host, &addr, timeout, args.verify) {
+        match ping(&addr, host, port, timeout, args.verify) {
             Ok(r) => println!("{}", r.json),
             Err(e) => print_io_error(&e),
         }
@@ -43,19 +36,18 @@ fn main() {
     }
 
 
-    
+    // The amount of data that the client can send can be calculated in advance, without needing to obtain it after sending.
     println!("PING {} ({}) {} bytes of data.", args.target, addr, seek_send_bytes(host));
     let mut total = Total::default();
     let running = set_ctrlc();
     let start = Instant::now();
-
     for seq in 0..args.count {
         if !running.load(Ordering::SeqCst) {
             break;
         }
 
         total.transmitted += 1;
-        match ping(&host, &addr, timeout, args.verify) {
+        match ping(&addr, host, port, timeout, args.verify) {
             Ok(r) => {
                 total.received += 1;
                 total.rtts.push(r.elapsed);
