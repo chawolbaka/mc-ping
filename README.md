@@ -1,5 +1,5 @@
 # Minecraft Ping
-A blazingly 💧 slow 🐌 software provides a command-line tool for checking Minecraft server ping, latency, and availability.
+A blazingly 🔥 slow 🐌 software provides a command-line tool for checking Minecraft server ping, latency, and availability.
 
 **Example**
 ```bash
