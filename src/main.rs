@@ -16,12 +16,11 @@ use cli::Args;
 use dns::{resolve_host_with_family, strip_port};
 use stats::Total;
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    // If a check error is encountered, just panic; I don't think formatting is necessary.
-    args.validate_args().unwrap();
-    let addr = resolve_host_with_family(&args.target, args.get_ip_family()).unwrap(); 
+    args.validate()?;
+    let addr = resolve_host_with_family(&args.target, args.get_ip_family())?;
     let host = args.server_address.as_deref().unwrap_or_else(|| strip_port(&args.target));
     let port = args.server_port.unwrap_or_else(|| addr.port());
     let timeout = Duration::from_secs_f64(args.timeout);
@@ -32,7 +31,7 @@ fn main() {
             Ok(r) => println!("{}", r.json),
             Err(e) => print_io_error(&e),
         }
-        return;
+        return Ok(());
     }
 
 
@@ -84,6 +83,8 @@ fn main() {
         println!("\n--- {host} statistics ---");
         println!("{total}");
     }
+
+    Ok(())
 }
 
 fn print_io_error(error: &io::Error) {
@@ -93,7 +94,6 @@ fn print_io_error(error: &io::Error) {
         eprintln!("{}", error)
     }
 }
-
 
 fn set_ctrlc() -> Arc<AtomicBool> {
     let arc = Arc::new(AtomicBool::new(true));

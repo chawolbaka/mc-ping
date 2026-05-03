@@ -49,7 +49,7 @@ pub struct Args {
 }
 
 impl Args {
-    
+
     pub fn get_ip_family(&self) -> IpFamily {
         if self.ipv4 {
             return IpFamily::V4;
@@ -60,17 +60,19 @@ impl Args {
         }
     }
     
-    pub fn validate_args(&self) -> Result<(), &'static str> {
+    pub fn validate(&self) -> anyhow::Result<()> {
         if self.count == 0 {
-            return Err("ping: bad number of packets to transmit.");
+            anyhow::bail!("bad number of packets to transmit.");
         }
-        if self.interval < 0.0 {
-            return Err("ping: bad timing interval");
+        else if self.interval < 0.0 {
+            anyhow::bail!("bad timing interval");
         }
-        if self.timeout <= 0.0 {
-            return Err("ping: bad timeout.");
+        else if self.timeout <= 0.0 {
+            anyhow::bail!("bad timeout.");
         }
-        Ok(())
+        else {
+            Ok(())
+        }
     }   
 }
 
